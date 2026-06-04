@@ -94,12 +94,13 @@ def main():
         posts = list(filter(lambda media: int(media.get("media_type", -1)) == 2, json.loads(json_text)))
         counter = 1
 
-        for idx, (post, url) in enumerate(zip(posts, map(lambda p: get_url(client, p), posts))):
-            if url is None:
-                print("post has no video:", get_id(post))
-                continue
-            
+        for idx, post in enumerate(posts):
             try:
+                url = get_url(client, post)
+                if url is None:
+                    print("post has no video:", get_id(post))
+                    continue
+
                 path = (output_dir / get_post_title(post)).with_suffix(".mp4")
                 download_file(client, url, path, lambda done, total: show_prog(f"{counter:02}. {get_post_title(post)}", done, total))
                 counter += 1
