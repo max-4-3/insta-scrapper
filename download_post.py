@@ -1,5 +1,5 @@
 import sys, json
-from typing import Callable
+from typing import Callable, Iterable
 
 from httpx import Client
 from pathlib import Path
@@ -83,6 +83,22 @@ def download_file(client: Client, url: str, path: Path, callback: Callable[[int,
     finally:
         if tmp_path.exists():
             tmp_path.unlink(missing_ok=True)
+
+def flattern(posts: Iterable[dict]) -> list[dict]:
+    # carousel_media
+    posts_ = []
+
+    for post in posts:
+        if post.get("__typename", "") == "XDTMediaDict" and (carousels := post.get("carousel_media", [])):
+            for carousel in carousels:
+                carousel["user"] = post["user"]
+                carousel["like_count"] = post.get("like_count", -1)
+                posts_.append(carousel)
+        else:
+            posts_.append(post)
+
+    return posts_
+
 def main():
     in_path = sys.argv[1]
     if in_path == "-":
@@ -94,7 +110,7 @@ def main():
     output_dir.mkdir(exist_ok=True, parents=True)
 
     with Client(follow_redirects=True, headers=HEADERS) as client:
-        posts = list(filter(is_video, json.loads(json_text)))
+        posts = list(flattern(filter(is_video, json.loads(json_text))))
         counter = 1
 
         for idx, (post, url) in enumerate(zip(posts, map(get_url, posts))):

@@ -71,15 +71,10 @@ def main():
             }
 
             
-            # query = {
-            #     "doc_id": "27242482582022127",
-            #     "variables": json.dumps(variables),
-            # }
             query = {
-                "doc_id": "26920028827692530",
+                "doc_id": "27242482582022127",
                 "variables": json.dumps(variables),
             }
-
             path = "/graphql/query/"
             resp = client.request(
                 "GET",
