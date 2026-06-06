@@ -42,6 +42,7 @@ def write(path: Path, **kwarg):
 
 
 def get_user_id(client: Client, username: str) -> str:
+    # it fails if the user hasn't posted any posts
     variables = {
         "after": None,
         "before": None,
@@ -77,7 +78,7 @@ def main():
     username = argv.pop()
 
     with Client(base_url="https://www.instagram.com", headers=HEADERS, cookies=COOKIES, follow_redirects=True) as client:
-        user_id: str = get_user_id(client, username)
+        user_id: str = get_user_id(client, username) if not username.isdigit() else username
         after: str | None = None
         has_next = True
         highlights = []

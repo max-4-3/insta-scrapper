@@ -38,6 +38,7 @@ cat '<username>-reels.json' | jq '.total_reels' | uv run download_reels.py - '<u
 ## HIGHLIGHTS:
 > [!WARNING]
 > This requires you to set ur accounts cookies in the `./.env` file (check `./.env.example`)
+> This requires the user to have posted atleast 1 post or you supply the `user_id` inplace of `username`
 
 ### extract:
 ```console

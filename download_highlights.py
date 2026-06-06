@@ -78,6 +78,9 @@ def get_title(media: dict) -> str:
 
     return title
 
+def get_highlight_title(highlight: dict) -> str:
+    return highlight.get("title") or highlight['id']
+
 def show_prog(prefix: str, done: int, total: int) -> None:
     perc = (total > 0 and (done / total) or -1) * 100
 
@@ -112,7 +115,7 @@ def get_media(client: Client, highlight_id: str) -> Generator[dict, None, list[d
             reverse=True,
         )
 
-        print("found items for", key, "items:", len(items), "results:", len(results))
+        print("found items for", key, "items:", len(items))
         for item in items:
             results.append(item)
             yield item
@@ -145,6 +148,9 @@ def main():
                 continue
 
             counter = 1
+            root = output_dir / highlight["id"]
+            print("saving", get_highlight_title(highlight), "highlight under:", root)
+
             for idx, media in enumerate(medias):
                 try:
                     url = get_url(media)
@@ -157,7 +163,7 @@ def main():
 
                 try:
                     title = get_title(media)
-                    path = output_dir / highlight["id"] / f"{title}.mp4"
+                    path = root / f"{title}.mp4"
                     download_file(dl_client, url, path, lambda done, total: show_prog(f"{counter:02}. {title}", done, total))
                     counter += 1
                     print()
