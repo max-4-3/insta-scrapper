@@ -112,11 +112,10 @@ def get_media(client: Client, highlight_id: str) -> Generator[dict, None, list[d
             reverse=True,
         )
 
+        print("found items for", key, "items:", len(items), "results:", len(results))
         for item in items:
             results.append(item)
             yield item
-
-        print("found items for", key, "items:", len(items), "results:", len(results))
 
     return results
 
@@ -132,7 +131,7 @@ def main():
 
     with (Client(base_url="https://www.instagram.com", follow_redirects=True, headers=HEADERS, cookies=COOKIES) as client,
           Client(follow_redirects=True, headers={"User-Agent": HEADERS["User-Agent"]}) as dl_client):
-        highlights = list(filter(lambda media: media.get("__typename", "") == "XDTReelDict" and media.get("video_versions"), json.loads(json_text)))
+        highlights = list(filter(lambda media: media.get("__typename", "") == "XDTReelDict", json.loads(json_text)))
         stories_seen = 0
 
         for highlight in highlights:
@@ -159,7 +158,6 @@ def main():
                 try:
                     title = get_title(media)
                     path = output_dir / highlight["id"] / f"{title}.mp4"
-                    print("saving as:", path.stem)
                     download_file(dl_client, url, path, lambda done, total: show_prog(f"{counter:02}. {title}", done, total))
                     counter += 1
                     print()
