@@ -113,8 +113,8 @@ def main():
                 )
 
 
-            highlights = data["data"]["highlights"]
-            page_info = highlights["page_info"]
+            highlight = data["data"]["highlights"]
+            page_info = highlight["page_info"]
 
             after = page_info["end_cursor"]
             has_next = page_info["has_next_page"]
@@ -123,7 +123,7 @@ def main():
             try:
                 for edge in filter(bool, map(
                     lambda edge: edge.get("node"),
-                    highlights["edges"],
+                    highlight["edges"],
                 )):
                     edges.append(edge)
                 print("extracted", len(edges), "total", len(highlights) + len(edges))
