@@ -1,9 +1,17 @@
+# README
+
+A set of helpful tools to scrap data from instagram
+> [!NOTE]
+> Some tool requires you to set ur account cookies
+> Getting those cookies is up to you
+
 ## POSTS:
 
 ### extract:
 ```console
 uv run posts.py '<username>'
 ```
+
 ### download:
 ```console
 cat '<username>.json' | jq '.total_posts' | uv run download_posts.py - '<username>'
