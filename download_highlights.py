@@ -3,7 +3,6 @@ from typing import Callable, Generator
 
 from httpx import Client
 from pathlib import Path
-from random import choice
 from time import sleep
 from random import random
 
@@ -133,15 +132,25 @@ def main():
 
     with (Client(base_url="https://www.instagram.com", follow_redirects=True, headers=HEADERS, cookies=COOKIES) as client,
           Client(follow_redirects=True, headers={"User-Agent": HEADERS["User-Agent"]}) as dl_client):
-        highlights = list(filter(lambda media: media.get("__typename", "") == "XDTReelDict" , json.loads(json_text)))
-        counter = 1
+        highlights = list(filter(lambda media: media.get("__typename", "") == "XDTReelDict" and media.get("video_versions"), json.loads(json_text)))
+        stories_seen = 0
 
-        for idx, highlight in enumerate(highlights):
-            for media in get_media(client, highlight["id"]):
+        for highlight in highlights:
+            try:
+                medias = get_media(client, highlight["id"])
+                if not medias:
+                    print("unabel to extract medias for highlight:", highlight["id"])
+                    continue
+            except Exception as e:
+                print("extract error on highlight:", highlight["id"])
+                continue
+
+            counter = 1
+            for idx, media in enumerate(medias):
                 try:
                     url = get_url(media)
                     if not url:
-                        print("unable to extract url for", get_id(media))
+                        print("unable to extract url for", get_id(media), "maybe an image?")
                         continue
                 except Exception as e:
                     print("extract error on:", get_title(media), get_id(media))
@@ -149,7 +158,7 @@ def main():
 
                 try:
                     title = get_title(media)
-                    path = (output_dir / highlight["id"] / title).with_suffix(".mp4")
+                    path = output_dir / highlight["id"] / f"{title}.mp4"
                     print("saving as:", path.stem)
                     download_file(dl_client, url, path, lambda done, total: show_prog(f"{counter:02}. {title}", done, total))
                     counter += 1
@@ -158,8 +167,10 @@ def main():
                     print("\n", "download error on:", get_id(media), "error:", e)
                 finally:
                     sleep((idx % (2 if idx % 10 == 0 else 1)) + random())
+            print("stories downloaded:", counter)
+            stories_seen += counter
 
-        print("total highlights:", len(highlights))
+        print("total highlights:", len(highlights), "total stories:", stories_seen)
 
 if __name__ == "__main__":
     main()
