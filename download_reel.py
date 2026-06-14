@@ -6,7 +6,9 @@ from pathlib import Path
 from time import sleep
 from random import random
 
+from env import load_env
 
+cookies_ = load_env()
 HEADERS = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
         "Accept": "*/*",
@@ -21,6 +23,7 @@ HEADERS = {
         "Pragma": "no-cache",
         "X-Asbd-Id": "359341",
 }
+COOKIES = cookies_
 
 def get_key(post: dict):
     width = post.get("width", 1)
@@ -32,8 +35,16 @@ def get_url(client: Client, post: dict) -> str | None:
     path = f"/api/v1/media/{reel_id}/info/"
     resp = client.get(path, follow_redirects=True)
     resp.raise_for_status()
-    post = resp.json()
+    
+    if not ((ct := resp.headers.get("Content-Type", "")) and "json" in ct.lower()):
+        raise RuntimeError(f"Expecting json response, got: {ct} on url: {path}")
 
+    post = resp.json()
+    if resp.status_code != 200 or post.get("status", "") != "ok" or not post.get("items", None):
+        raise RuntimeError(
+                f"[{resp.status_code}] unable to retrive media items:\n{resp.text[:50]}..."
+        )
+    
     video_versions: list[dict] = [version for item in post["items"] for version in item.get("video_versions", [])]
     return max(video_versions, key=get_key, default={}).get("url")
 
@@ -41,7 +52,7 @@ def get_id(post: dict) -> str:
     return post.get("code") or post["id"]
 
 def get_post_title(post: dict) -> str:
-    return (user := post.get("user")) and f"Video by {user["id"]} [{get_id(post)}]" or get_id(post)
+    return (user := post.get("user")) and f"Video by {user.get("username") or user["id"]} [{get_id(post)}]" or get_id(post)
 
 def show_prog(prefix: str, done: int, total: int) -> None:
     perc = (total > 0 and (done / total) or -1) * 100
@@ -90,7 +101,7 @@ def main():
     output_dir = Path(sys.argv[2])
     output_dir.mkdir(exist_ok=True, parents=True)
 
-    with Client(follow_redirects=True, headers=HEADERS) as client:
+    with Client(base_url="https://www.instagram.com", follow_redirects=True, headers=HEADERS, cookies=COOKIES) as client:
         posts = list(filter(lambda media: int(media.get("media_type", -1)) == 2, json.loads(json_text)))
         counter = 1
 
@@ -107,6 +118,7 @@ def main():
                 print()
             except Exception as e:
                 print("\n", "download error on:", get_id(post), "error:", e)
+                raise
             finally:
                 sleep((idx % (4 if idx % 10 == 0 else 2)) + random())
 
