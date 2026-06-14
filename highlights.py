@@ -22,9 +22,9 @@ def get_user_id(client: Client, username: str) -> str:
     }
     
     resp = graphql_query(client, DocIds.USER_FEED, variables, expected_key="data")
-    user = dict_get(resp, "xdt_api__v1__feed__user_timeline_graphql_connection", "edges", 0, "node", "user", "id")
+    user = dict_get(resp, "xdt_api__v1__feed__user_timeline_graphql_connection", "edges", 0, "node", "user")
 
-    return dict_try(user, "fk", "id")
+    return dict_try(user, "pk", "id")
 
 def main():
     if (len(argv) < 2):

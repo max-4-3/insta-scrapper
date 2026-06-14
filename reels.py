@@ -21,9 +21,9 @@ def get_user_id(client: Client, username: str) -> str:
     }
 
     resp = graphql_query(client, DocIds.USER_FEED, variables, expected_key="data")
-    user = dict_get(resp, "xdt_api__v1__feed__user_timeline_graphql_connection", "edges", 0, "node", "user", "id")
+    user = dict_get(resp, "xdt_api__v1__feed__user_timeline_graphql_connection", "edges", 0, "node", "user")
 
-    return dict_try(user, "fk", "id")
+    return dict_try(user, "pk", "id")
 
 def main():
     if (len(argv) < 2):
@@ -31,7 +31,7 @@ def main():
 
     username = argv.pop()
 
-    with Clients.normal() as client:
+    with Clients.authed() as client:
         user_id: str = get_user_id(client, username)
         after: str | None = None
         has_next = True
@@ -50,7 +50,7 @@ def main():
                 "last": None,
             }
 
-            resp = graphql_query(client, DocIds.USER_CLIPS, variables, "data")
+            resp = graphql_query(client, DocIds.USER_CLIPS, variables, expected_key="data")
             user_media = dict_get(resp, "xdt_api__v1__clips__user__connection_v2")
 
             after = dict_get(user_media, "page_info", "end_cursor")

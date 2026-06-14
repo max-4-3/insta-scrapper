@@ -43,7 +43,7 @@ def main():
     output_dir = Path(sys.argv[2])
     output_dir.mkdir(exist_ok=True, parents=True)
 
-    with Clients.normal() as client:
+    with Clients.authed() as client:
         posts = list(filter(lambda media: int(media.get("media_type", -1)) == 2, json.loads(json_text)))
         counter = 1
 
