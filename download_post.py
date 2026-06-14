@@ -1,26 +1,11 @@
 import sys, json
-from typing import Callable, Iterable
+from typing import Iterable
 
-from httpx import Client
 from pathlib import Path
 from time import sleep
 from random import random
 
-
-HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.5",
-        "X-IG-App-ID": "936619743392459",
-        "X-ASBD-ID": "359341",
-        "X-Requested-With": "XMLHttpRequest",
-        "Referer": "https://www.instagram.com",
-        "Cache-Control": "no-cache",
-        "DNT": "1",
-        "Origin": "https://www.instagram.com",
-        "Pragma": "no-cache",
-        "X-Asbd-Id": "359341",
-}
+from utils import Clients, dict_try, download_file
 
 def get_key(post: dict):
     width = post.get("width", 1)
@@ -28,10 +13,7 @@ def get_key(post: dict):
     return width * height
 
 def get_url(post: dict) -> str | None:
-    if "video_versions" not in post:
-        return None
-
-    video_versions: list[dict] = post["video_versions"]
+    video_versions: list[dict] = post.get("video_versions") or []
     return max(video_versions, key=get_key, default={}).get("url")
 
 def is_video(post: dict) -> bool:
@@ -41,48 +23,15 @@ def is_video(post: dict) -> bool:
     )
 
 def get_id(post: dict) -> str:
-    return post.get("code") or post["id"]
+    return dict_try(post, "code", "id")
 
 def get_post_title(post: dict) -> str:
-    return (user := post.get("user")) and f"Video by {user["username"]} [{get_id(post)}]" or get_id(post)
+    return (user := post.get("user")) and f"Video by {dict_try(user, "username", "id")} [{get_id(post)}]" or get_id(post)
 
 def show_prog(prefix: str, done: int, total: int) -> None:
     perc = (total > 0 and (done / total) or -1) * 100
 
     print("\r\033[2K" + prefix, done, total, f"{perc:.1f}%", end="")
-
-def download_file(client: Client, url: str, path: Path, callback: Callable[[int, int], None]) -> Path:
-    path = Path(path)
-    tmp_path = path.with_suffix(path.suffix + ".part")
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        with client.stream("GET", url, follow_redirects=True) as response:
-            response.raise_for_status()
-            total = int(response.headers.get("Content-Length", -1))
-            done = 0
-
-            if (total > 0 and path.exists() and path.stat().st_size == total):
-                if callback:
-                    callback(total, total)
-                if tmp_path.exists():
-                    tmp_path.unlink(missing_ok=True)
-                return path
-
-            with tmp_path.open("wb") as f:
-                for chunk in response.iter_bytes():
-                    f.write(chunk)
-                    done += len(chunk)
-                    if callback is not None:
-                        callback(done, total)
-
-        tmp_path.replace(path)
-        return path
-
-    finally:
-        if tmp_path.exists():
-            tmp_path.unlink(missing_ok=True)
 
 def flattern(posts: Iterable[dict]) -> list[dict]:
     # carousel_media
@@ -109,7 +58,7 @@ def main():
     output_dir = Path(sys.argv[2])
     output_dir.mkdir(exist_ok=True, parents=True)
 
-    with Client(follow_redirects=True, headers=HEADERS) as client:
+    with Clients.normal() as client:
         posts = list(flattern(filter(is_video, json.loads(json_text))))
         counter = 1
 

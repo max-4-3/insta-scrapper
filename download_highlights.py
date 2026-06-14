@@ -1,60 +1,12 @@
 import sys, json
-from typing import Callable, Generator
+from typing import Generator
 
 from httpx import Client
 from pathlib import Path
 from time import sleep
 from random import random
 
-from env import load_env
-
-HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.5",
-        "X-IG-App-ID": "936619743392459",
-        "X-ASBD-ID": "359341",
-        "X-Requested-With": "XMLHttpRequest",
-        "Referer": "https://www.instagram.com",
-        "Cache-Control": "no-cache",
-        "DNT": "1",
-        "Origin": "https://www.instagram.com",
-        "Pragma": "no-cache",
-}
-COOKIES = load_env()
-
-def download_file(client: Client, url: str, path: Path, callback: Callable[[int, int], None]) -> Path:
-    path = Path(path)
-    tmp_path = path.with_suffix(path.suffix + ".part")
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        with client.stream("GET", url, follow_redirects=True) as response:
-            response.raise_for_status()
-            total = int(response.headers.get("Content-Length", -1))
-            done = 0
-
-            if (total > 0 and path.exists() and path.stat().st_size == total):
-                if callback:
-                    callback(total, total)
-                if tmp_path.exists():
-                    tmp_path.unlink(missing_ok=True)
-                return path
-
-            with tmp_path.open("wb") as f:
-                for chunk in response.iter_bytes():
-                    f.write(chunk)
-                    done += len(chunk)
-                    if callback is not None:
-                        callback(done, total)
-
-        tmp_path.replace(path)
-        return path
-
-    finally:
-        if tmp_path.exists():
-            tmp_path.unlink(missing_ok=True)
+from utils import Clients, dict_try, download_file, validate_json_response
 
 def get_key(post: dict):
     width = post.get("width", 1)
@@ -66,20 +18,19 @@ def get_url(media: dict) -> str | None:
     return max(video_versions, key=get_key, default={}).get("url")
 
 def get_id(media: dict) -> str:
-    return media.get("code") or media["id"]
+    return dict_try(media, "code", "id")
 
 def get_title(media: dict) -> str:
     user = media.get("user")
     if user:
-        name = user.get("username") or user["id"]
-        title = f"Highlight by {name} [{get_id(media)}]"
+        title = f"Highlight by {dict_try(user, "username", "id")} [{get_id(media)}]"
     else:
         title = get_id(media)
 
     return title
 
 def get_highlight_title(highlight: dict) -> str:
-    return highlight.get("title") or highlight['id']
+    return dict_try(highlight, "title", "id")
 
 def show_prog(prefix: str, done: int, total: int) -> None:
     perc = (total > 0 and (done / total) or -1) * 100
@@ -94,16 +45,9 @@ def get_media(client: Client, highlight_id: str) -> Generator[dict, None, list[d
     path = "/api/v1/feed/reels_media/"
 
     resp = client.request("GET", path, params=params)
-    data = (
-        json.loads(resp.text) if "json" in resp.headers.get("Content-Type", "") else {}
-    )
+    reels = validate_json_response(resp, expected_key="reels")
 
-    if resp.status_code != 200 or data.get("status", "") != "ok" or not data.get("reels"):
-        raise RuntimeError(
-            f"[{resp.status_code}] unable to retrive media:\n{resp.text}"
-        )
-
-    for key, node in data["reels"].items():
+    for key, node in reels.items():
         extensions: dict[str, dict] = {
             "user": node["user"],
             "highlight_cover": node["cover_media"],
@@ -132,23 +76,22 @@ def main():
     output_dir = Path(sys.argv[2])
     output_dir.mkdir(exist_ok=True, parents=True)
 
-    with (Client(base_url="https://www.instagram.com", follow_redirects=True, headers=HEADERS, cookies=COOKIES) as client,
-          Client(follow_redirects=True, headers={"User-Agent": HEADERS["User-Agent"]}) as dl_client):
+    with Clients.normal() as client, Clients.normal() as dl_client:
         highlights = list(filter(lambda media: media.get("__typename", "") == "XDTReelDict", json.loads(json_text)))
         stories_seen = 0
 
-        for highlight in highlights:
+        for id, highlight in zip(map(lambda highlight: str(highlight["id"]), highlights), highlights):
             try:
-                medias = get_media(client, highlight["id"])
+                medias = get_media(client, id)
                 if not medias:
-                    print("unabel to extract medias for highlight:", highlight["id"])
+                    print("unabel to extract medias for highlight:", id)
                     continue
             except Exception as e:
-                print("extract error on highlight:", highlight["id"])
+                print("extract error on highlight:", id)
                 continue
 
             counter = 1
-            root = output_dir / highlight["id"]
+            root = output_dir / id
             print("saving", get_highlight_title(highlight), "highlight under:", root)
 
             for idx, media in enumerate(medias):
@@ -171,6 +114,7 @@ def main():
                     print("\n", "download error on:", get_id(media), "error:", e)
                 finally:
                     sleep((idx % (2 if idx % 10 == 0 else 1)) + random())
+
             print("stories downloaded:", counter)
             stories_seen += counter
 

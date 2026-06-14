@@ -85,17 +85,11 @@ def expect(resp: httpx.Response, content_type: str):
     if content_type not in _ctype:
         raise TypeError(f"unexpected content type '{_ctype}' in response (want: {content_type})")
 
-def graphql_query(client: httpx.Client, doc_id: str | int, variables: dict[str, object], expected_key: str | None = None) -> dict:
-    query = {
-        "doc_id": str(doc_id),
-        "variables": json.dumps(variables),
-    }
-
-    resp = client.get("/graphql/query/", params=query, follow_redirects=True)
+def validate_json_response(resp: httpx.Response, expected_key: str | None = None, status_key: str | None = "status") -> dict:
     expect(resp, "json")
 
     data = json.loads(resp.text)
-    if resp.status_code != 200 or data.get("status", "") != "ok":
+    if resp.status_code != 200 or (status_key and data.get(status_key, "") != "ok"):
         raise RuntimeError(
             f"[{resp.status_code}] API errored out:\n{resp.text}"
         )
@@ -104,8 +98,17 @@ def graphql_query(client: httpx.Client, doc_id: str | int, variables: dict[str, 
         if expected_key not in data:
             raise ValueError(f"[{resp.status_code}] Response does not contain '{expected_key}' key")
         data = data[expected_key]
-    
+
     return data
+
+def graphql_query(client: httpx.Client, doc_id: str | int, variables: dict[str, object], expected_key: str | None = None) -> dict:
+    query = {
+        "doc_id": str(doc_id),
+        "variables": json.dumps(variables),
+    }
+
+    resp = client.get("/graphql/query/", params=query, follow_redirects=True)
+    return validate_json_response(resp, expected_key=expected_key)
 
 
 class _Utils:
@@ -114,6 +117,13 @@ class _Utils:
 
 class Writer(_Utils):
     _out_path: pathlib.Path = pathlib.Path.cwd() / "out"
+
+    @classmethod
+    def set_path(cls, out_dir: pathlib.Path) -> None:
+        cls._out_path = out_dir
+
+        cls._out_path.mkdir(exist_ok=True, parents=True)
+        setattr(cls, "_out_path", True)
 
     @classmethod
     def json_out(cls, filename: str, **kwarg) -> None:

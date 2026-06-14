@@ -1,29 +1,11 @@
 import sys, json
-from typing import Callable
 
 from httpx import Client
 from pathlib import Path
 from time import sleep
 from random import random
 
-from env import load_env
-
-cookies_ = load_env()
-HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.5",
-        "X-IG-App-ID": "936619743392459",
-        "X-ASBD-ID": "359341",
-        "X-Requested-With": "XMLHttpRequest",
-        "Referer": "https://www.instagram.com",
-        "Cache-Control": "no-cache",
-        "DNT": "1",
-        "Origin": "https://www.instagram.com",
-        "Pragma": "no-cache",
-        "X-Asbd-Id": "359341",
-}
-COOKIES = cookies_
+from utils import Clients, dict_try, download_file, validate_json_response
 
 def get_key(post: dict):
     width = post.get("width", 1)
@@ -33,64 +15,24 @@ def get_key(post: dict):
 def get_url(client: Client, post: dict) -> str | None:
     reel_id = post["pk"]
     path = f"/api/v1/media/{reel_id}/info/"
-    resp = client.get(path, follow_redirects=True)
-    resp.raise_for_status()
-    
-    if not ((ct := resp.headers.get("Content-Type", "")) and "json" in ct.lower()):
-        raise RuntimeError(f"Expecting json response, got: {ct} on url: {path}")
 
-    post = resp.json()
-    if resp.status_code != 200 or post.get("status", "") != "ok" or not post.get("items", None):
-        raise RuntimeError(
-                f"[{resp.status_code}] unable to retrive media items:\n{resp.text[:50]}..."
-        )
+    resp = client.request("GET", path, follow_redirects=True)
+    posts = validate_json_response(resp, expected_key="items")
     
-    video_versions: list[dict] = [version for item in post["items"] for version in item.get("video_versions", [])]
+    video_versions: list[dict] = [version for item in posts for version in item.get("video_versions") or []]
     return max(video_versions, key=get_key, default={}).get("url")
 
 def get_id(post: dict) -> str:
-    return post.get("code") or post["id"]
+    return dict_try(post, "code", "id")
 
 def get_post_title(post: dict) -> str:
-    return (user := post.get("user")) and f"Video by {user.get("username") or user["id"]} [{get_id(post)}]" or get_id(post)
+    return (user := post.get("user")) and f"Video by {dict_try(user, "username", "id")} [{get_id(post)}]" or get_id(post)
 
 def show_prog(prefix: str, done: int, total: int) -> None:
     perc = (total > 0 and (done / total) or -1) * 100
 
     print("\r\033[2K" + prefix, done, total, f"{perc:.1f}%", end="")
 
-def download_file(client: Client, url: str, path: Path, callback: Callable[[int, int], None]) -> Path:
-    path = Path(path)
-    tmp_path = path.with_suffix(path.suffix + ".part")
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        with client.stream("GET", url, follow_redirects=True) as response:
-            response.raise_for_status()
-            total = int(response.headers.get("Content-Length", -1))
-            done = 0
-
-            if (total > 0 and path.exists() and path.stat().st_size == total):
-                if callback:
-                    callback(total, total)
-                if tmp_path.exists():
-                    tmp_path.unlink(missing_ok=True)
-                return path
-
-            with tmp_path.open("wb") as f:
-                for chunk in response.iter_bytes():
-                    f.write(chunk)
-                    done += len(chunk)
-                    if callback is not None:
-                        callback(done, total)
-
-        tmp_path.replace(path)
-        return path
-
-    finally:
-        if tmp_path.exists():
-            tmp_path.unlink(missing_ok=True)
 def main():
     in_path = sys.argv[1]
     if in_path == "-":
@@ -101,7 +43,7 @@ def main():
     output_dir = Path(sys.argv[2])
     output_dir.mkdir(exist_ok=True, parents=True)
 
-    with Client(base_url="https://www.instagram.com", follow_redirects=True, headers=HEADERS, cookies=COOKIES) as client:
+    with Clients.normal() as client:
         posts = list(filter(lambda media: int(media.get("media_type", -1)) == 2, json.loads(json_text)))
         counter = 1
 
