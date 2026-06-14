@@ -1,7 +1,9 @@
 import json
+from logging import raiseExceptions
 import httpx
 import pathlib
 from typing import Any, Callable
+from datetime import datetime
 
 from env import load_env
 
@@ -35,12 +37,17 @@ def dict_get(root: dict, *paths: str | int) -> Any:
         if not isinstance(path, int):
             raise TypeError(f"found array but path is not 'index', path: {total}")
         result = curr[path]
-    else:
+    elif isinstance(curr, dict):
         result = curr.get(path)
+    else:
+        raise ValueError(f"passed empty root")
 
     return result
 
-def dict_try(root: dict, *keys: str) -> Any:
+def dict_try(root: dict | None, *keys: str) -> Any:
+    if not isinstance(root, dict):
+        raise ValueError(f"passed invalid root, empty: {root is None}")
+
     for key in keys:
         if key in root:
             return root[key]
@@ -109,7 +116,6 @@ def graphql_query(client: httpx.Client, doc_id: str | int, variables: dict[str, 
 
     resp = client.get("/graphql/query/", params=query, follow_redirects=True)
     return validate_json_response(resp, expected_key=expected_key)
-
 
 class _Utils:
     def __init__(self) -> None:
