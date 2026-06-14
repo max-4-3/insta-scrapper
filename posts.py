@@ -2,6 +2,7 @@ import time
 import random
 from sys import argv
 
+from consts import DocIds
 from utils import Clients, Writer, dict_get, graphql_query
 
 def main():
@@ -34,7 +35,7 @@ def main():
                 "__relay_internal__pv__PolarisAIGMAccountLabelEnabledrelayprovider": False,
             }
 
-            resp = graphql_query(client, 27242482582022127, variables, expected_key="data")
+            resp = graphql_query(client, DocIds.USER_FEED, variables, expected_key="data")
             user_media = dict_get(resp, "xdt_api__v1__feed__user_timeline_graphql_connection")
 
             after = dict_get(user_media, "page_info", "end_cursor")

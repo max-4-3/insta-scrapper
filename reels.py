@@ -3,6 +3,7 @@ import time
 import random
 from sys import argv
 
+from consts import DocIds
 from utils import Clients, Writer, dict_get, dict_try, graphql_query
 
 def get_user_id(client: Client, username: str) -> str:
@@ -19,7 +20,7 @@ def get_user_id(client: Client, username: str) -> str:
         "__relay_internal__pv__PolarisAIGMAccountLabelEnabledrelayprovider": False,
     }
 
-    resp = graphql_query(client, 27242482582022127, variables, expected_key="data")
+    resp = graphql_query(client, DocIds.USER_FEED, variables, expected_key="data")
     user = dict_get(resp, "xdt_api__v1__feed__user_timeline_graphql_connection", "edges", 0, "node", "user", "id")
 
     return dict_try(user, "fk", "id")
@@ -49,7 +50,7 @@ def main():
                 "last": None,
             }
 
-            resp = graphql_query(client, 26920028827692530, variables, "data")
+            resp = graphql_query(client, DocIds.USER_CLIPS, variables, "data")
             user_media = dict_get(resp, "xdt_api__v1__clips__user__connection_v2")
 
             after = dict_get(user_media, "page_info", "end_cursor")
