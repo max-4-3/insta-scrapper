@@ -1,45 +1,9 @@
-from httpx import Client
-import json
 import time
 import random
-from pathlib import Path
 from sys import argv
-from env import load_env
+from httpx import Client
 
-cookies_ = load_env()
-
-HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.5",
-        "X-IG-App-ID": "936619743392459",
-        "X-ASBD-ID": "359341",
-        "X-Requested-With": "XMLHttpRequest",
-        "Referer": "https://www.instagram.com",
-        "Cache-Control": "no-cache",
-        "DNT": "1",
-        "Origin": "https://www.instagram.com",
-        "Pragma": "no-cache",
-        "X-Asbd-Id": "359341",
-}
-COOKIES = load_env()
-
-def write(path: Path, **kwarg):
-    loaded: list | dict = {}
-
-    try:
-        loaded = json.loads(path.read_text())
-    except Exception:
-        pass
-
-    if isinstance(loaded, dict):
-        loaded.update(kwarg)
-    elif isinstance(loaded, list):
-        loaded.append({**kwarg})
-
-    path.write_text(json.dumps(loaded, indent=4, ensure_ascii=False))
-    print(path, "updated!")
-
+from utils import Clients, Writer, dict_get, dict_try, graphql_query
 
 def get_user_id(client: Client, username: str) -> str:
     # it fails if the user hasn't posted any posts
@@ -56,20 +20,10 @@ def get_user_id(client: Client, username: str) -> str:
         "__relay_internal__pv__PolarisAIGMAccountLabelEnabledrelayprovider": False,
     }
     
-    query = {
-        "doc_id": "27242482582022127",
-        "variables": json.dumps(variables),
-    }
+    resp = graphql_query(client, 27242482582022127, variables, expected_key="data")
+    user = dict_get(resp, "xdt_api__v1__feed__user_timeline_graphql_connection", "edges", 0, "node", "user", "id")
 
-    resp = client.get("/graphql/query/", params=query, follow_redirects=True)
-    data = json.loads(resp.text) if "json" in resp.headers.get("Content-Type", "") else {}
-
-    if resp.status_code != 200 or data.get("status", "") != "ok" or not data["data"]:
-        raise RuntimeError(
-            f"[{resp.status_code}] unable to retrive media:\n{resp.text}"
-        )
-    
-    return data["data"]["xdt_api__v1__feed__user_timeline_graphql_connection"]["edges"].pop()["node"]["user"]["id"]
+    return dict_try(user, "fk", "id")
 
 def main():
     if (len(argv) < 2):
@@ -77,7 +31,7 @@ def main():
 
     username = argv.pop()
 
-    with Client(base_url="https://www.instagram.com", headers=HEADERS, cookies=COOKIES, follow_redirects=True) as client:
+    with Clients.normal() as client:
         user_id: str = get_user_id(client, username) if not username.isdigit() else username
         after: str | None = None
         has_next = True
@@ -92,33 +46,11 @@ def main():
                 "user_id": user_id,
             }
 
-            query = {
-                "doc_id": "36997000523232338",
-                "variables": json.dumps(variables),
-            }
+            resp = graphql_query(client, 36997000523232338, variables, expected_key="data")
+            highlight = dict_get(resp, "highlights")
 
-            path = "/graphql/query/"
-            resp = client.request(
-                "GET",
-                path,
-                params=query,
-            )
-
-            data = (
-                json.loads(resp.text) if "json" in resp.headers.get("Content-Type", "") else {}
-            )
-
-            if resp.status_code != 200 or data.get("status", "") != "ok" or not data["data"]:
-                raise RuntimeError(
-                    f"[{resp.status_code}] unable to retrive media:\n{resp.text}"
-                )
-
-
-            highlight = data["data"]["highlights"]
-            page_info = highlight["page_info"]
-
-            after = page_info["end_cursor"]
-            has_next = page_info["has_next_page"]
+            after = dict_get(highlight, "page_info", "end_cursor")
+            has_next = dict_get(highlight, "page_info", "has_next_page")
 
             edges = []
             try:
@@ -134,7 +66,7 @@ def main():
             finally:
                 edges = sorted(edges, key=lambda node: node.get("taken_at", 0), reverse=True)
                 highlights = sorted(highlights + edges, key=lambda node: node.get("taken_at", 0), reverse=True)
-                write(Path(f"./{username}-highlights.json"), total_highlights=highlights, highlights=edges)
+                Writer.json_out(f"./{username}-highlights.json", highlights=highlights, edges=edges)
 
             time.sleep(random.uniform(1, 2))
 
