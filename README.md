@@ -14,7 +14,7 @@ uv run posts.py '<username>'
 
 ### download:
 ```console
-cat '<username>.json' | jq '.total_posts' | uv run download_posts.py - '<username>'
+cat '<username>-posts.json' | jq '.posts' | uv run download_posts.py - '<username>'
 ```
 
 ## REELS:
@@ -32,7 +32,7 @@ uv run reels.py '<username>'
 > That's why its advices to not use your main account
 
 ```console
-cat '<username>-reels.json' | jq '.total_reels' | uv run download_reels.py - '<username>'
+cat '<username>-reels.json' | jq '.reels' | uv run download_reels.py - '<username>'
 ```
 
 ## HIGHLIGHTS:
@@ -52,5 +52,5 @@ uv run highlights.py '<username>'
 > That's why its advices to not use your main account
 
 ```console
-cat '<username>-highlights.json' | jq '.total_highlights' | uv run download_highlights.py - '<username>'
+cat '<username>-highlights.json' | jq '.highlights' | uv run download_highlights.py - '<username>'
 ```
