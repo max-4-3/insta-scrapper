@@ -12,9 +12,8 @@ def get_key(post: dict):
     height = post.get("height", 1)
     return width * height
 
-def get_url(post: dict) -> str | None:
-    video_versions: list[dict] = post.get("video_versions") or []
-    return max(video_versions, key=get_key, default={}).get("url")
+def get_max_url(items: list[dict]) -> str | None:
+    return max(items, key=get_key, default={}).get("url")
 
 def is_video(post: dict) -> bool:
     return bool( # filter video nodes with valid url
@@ -22,11 +21,18 @@ def is_video(post: dict) -> bool:
         and post.get("video_versions")
     )
 
+def is_image(post: dict) -> bool:
+    return bool( # filter video nodes with valid url
+        post.get("__typename", "") == "XDTMediaDict"
+        and post.get("image_versions2")
+    )
+
 def get_id(post: dict) -> str:
-    return dict_try(post, "code", "id")
+    return dict_try(post, "code", "id", allow_null=False)
 
 def get_post_title(post: dict) -> str:
-    return (user := post.get("user")) and f"Video by {dict_try(user, "username", "id")} [{get_id(post)}]" or get_id(post)
+    prefix = is_video(post) and 'Video' or 'Image'
+    return (user := post.get("user")) and f"{prefix} by {dict_try(user, "username", "id")} [{get_id(post)}]" or get_id(post)
 
 def show_prog(prefix: str, done: int, total: int) -> None:
     perc = (total > 0 and (done / total) or -1) * 100
@@ -59,16 +65,22 @@ def main():
     output_dir.mkdir(exist_ok=True, parents=True)
 
     with Clients.normal() as client:
-        posts = list(flattern(filter(is_video, json.loads(json_text))))
+        posts = list(flattern(filter(lambda post: is_video(post) or is_image(post), json.loads(json_text))))
         counter = 1
 
-        for idx, (post, url) in enumerate(zip(posts, map(get_url, posts))):
+        for idx, (post, video) in enumerate(zip(posts, map(is_video, posts))):
+            if video:
+                url = get_max_url(post.get("video_versions") or [])
+            else:
+                url = get_max_url((post.get("image_versions2") or {}).get("candidates") or [])
+
             if url is None:
-                print("post has no video:", get_id(post))
+                print("invalid post:", get_id(post))
                 continue
             
             try:
-                path = (output_dir / get_post_title(post)).with_suffix(".mp4")
+                suffix = ".mp4" if video else ".jpg"
+                path = (output_dir / f"{get_post_title(post)}{suffix}")
                 download_file(client, url, path, lambda done, total: show_prog(f"{counter:02}. {get_post_title(post)}", done, total))
                 counter += 1
                 print()
@@ -78,7 +90,7 @@ def main():
                 sleep((idx % (4 if idx % 10 == 0 else 2)) + random())
 
 
-        print("total video posts:", len(posts))
+        print("total posts:", len(posts))
 
 if __name__ == "__main__":
     main()

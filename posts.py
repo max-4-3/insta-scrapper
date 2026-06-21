@@ -10,7 +10,7 @@ def main():
         raise ValueError("username required!")
 
     username = argv.pop()
-    with Clients.normal() as client:
+    with Clients.authed() as client:
         after: str | None = None
         has_next = True
         posts = []
@@ -21,12 +21,10 @@ def main():
                 "before": None,
                 "data": {
                     "count": 18,
-                    "latest_reel_media": True,
-                    "include_reel": True,
+                    "include_reel": False,
                     "include_chaining": True,
                     "include_feed_video": True,
                     "include_media_chaining": True,
-                    "include_reel_media_seen_timestamp": True,
                 },
                 "first": 18,
                 "last": None,

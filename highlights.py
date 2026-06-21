@@ -32,7 +32,7 @@ def main():
 
     username = argv.pop()
 
-    with Clients.normal() as client:
+    with Clients.authed() as client:
         user_id: str = get_user_id(client, username) if not username.isdigit() else username
         after: str | None = None
         has_next = True

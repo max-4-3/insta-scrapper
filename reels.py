@@ -44,7 +44,7 @@ def main():
                 "data": {
                     "page_size": 18,
                     "target_user_id": user_id,
-                    "include_feed_video": True,
+                    "include_feed_video": False,
                 },
                 "first": 3,
                 "last": None,

@@ -44,13 +44,16 @@ def dict_get(root: dict, *paths: str | int) -> Any:
 
     return result
 
-def dict_try(root: dict | None, *keys: str) -> Any:
+def dict_try(root: dict | None, *keys: str, allow_null: bool = True) -> Any:
     if not isinstance(root, dict):
         raise ValueError(f"passed invalid root, empty: {root is None}")
 
     for key in keys:
         if key in root:
-            return root[key]
+            if not allow_null and root[key] is None:
+                continue
+            else:
+                return root[key]
 
 def download_file(client: httpx.Client, url: str, path: pathlib.Path, callback: Callable[[int, int], None]) -> pathlib.Path:
     path = pathlib.Path(path)
@@ -74,7 +77,7 @@ def download_file(client: httpx.Client, url: str, path: pathlib.Path, callback: 
                 return path
 
             with tmp_path.open("wb") as f:
-                for chunk in response.iter_bytes():
+                for chunk in response.iter_bytes(1024 * 1024):
                     f.write(chunk)
                     done += len(chunk)
                     if callback is not None:
