@@ -1,10 +1,11 @@
-import json
 from typing import Callable
 from datetime import datetime
 from pathlib import Path
 
-
 from httpx import Client
+
+from polaris.utils import save_json
+
 type DownloaderFn = Callable[[dict, dict, Path], tuple[bool, Path]]
 
 
@@ -28,8 +29,11 @@ def download_carousel_media(media: dict, user: dict, out: Path) -> tuple[bool, P
             print(f"[WARN] NotImplemented for '{typ}'")
 
     print(f"[FINISHED] Downloaded '{len(downloaded)}' medias in '{out.resolve()}'")
-    (out / f"{user["username"]}-{datetime.now().timestamp()}-download-info.json").write_text(json.dumps(downloaded, indent=2))
 
+    now = datetime.now().timestamp()
+    username = user["username"]
+
+    save_json({"downloaded": downloaded}, out.joinpath(f"{username}-{now}-downloaded-info").with_suffix(".json"))
     return (True, out)
 
 
@@ -39,37 +43,45 @@ def download_video_media(media: dict, user: dict, out: Path) -> tuple[bool, Path
         "pid": media["pk"],
     })
 
-    path = out / name
+    path = out.joinpath(name)
     path.parent.mkdir(exist_ok=True, parents=True)
 
-    with Client(follow_redirects=True) as client:
+    with _download_client() as client:
         thumb_link = media["image_versions2"]["candidates"][0]["url"]
-        with client.stream("GET", thumb_link) as stream, path.with_suffix(".thumb.jpg").open('wb') as file:
-            file.write(stream.read())
-            print(f"[THUMB] Saved '{path.with_suffix(".thumb.jpg")}'")
+        _save(thumb_link, path, ".thumb.jpg", "THUMB", client)
 
         video_link = media["video_versions"][0]["url"]
-        with client.stream("GET", video_link) as stream, path.with_suffix(".mp4").open('wb') as file:
-            file.write(stream.read())
-            print(f"[VIDEO] Saved '{path.with_suffix(".mp4")}'")
+        _save(video_link, path, ".thumb.jpg", "THUMB", client)
 
-    return True, path
+    return (True, path)
 
 
 def download_image_media(media: dict, user: dict, out: Path) -> tuple[bool, Path]:
-    name = "{username}-{pid}.jpg".format_map({
+    name = "{username}-{pid}".format_map({
         "username": user["username"],
         "pid": media["pk"],
     })
-    link = media["image_versions2"]["candidates"][0]["url"]
 
-    out.mkdir(exist_ok=True, parents=True)
+    path = out.joinpath(name)
+    path.parent.mkdir(exist_ok=True, parents=True)
 
-    with Client() as client, client.stream("GET", link, follow_redirects=True) as steam, (out / name).open('wb') as file:
-        file.write(steam.read())
-        print(f"[IMAGE] Saved '{name}'")
+    with _download_client() as client:
+        image_link = media["image_versions2"]["candidates"][0]["url"]
+        _save(image_link, path, ".jpg", "IMAGE", client)
 
-    return True, out / name
+    return (True, path)
+
+
+def _save(link: str, path: Path, suffix: str, typ: str, client: Client):
+    p = path.with_suffix(suffix)
+    with client.stream("GET", link) as stream, p.open('wb') as file:
+        file.write(stream.read())
+
+    print(f"[{typ.upper()}] Saved '{p}'")
+
+
+def _download_client() -> Client:
+    return Client(follow_redirects=True)
 
 
 DOWNLOADERS: dict[str, DownloaderFn] = {
@@ -77,3 +89,5 @@ DOWNLOADERS: dict[str, DownloaderFn] = {
     "XIGPolarisVideoMedia": download_video_media,
     "XIGPolarisImageMedia": download_image_media,
 }
+
+__all__ = ("DOWNLOADERS",)
