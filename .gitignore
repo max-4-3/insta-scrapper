@@ -9,7 +9,11 @@ wheels/
 # Virtual environments
 .venv
 
+# Environment files / secrets
 .env
+.env.*
+!.env.example
+
 output/
 out/
 tmp/
