@@ -6,7 +6,7 @@ the data here, is embedded into the `GET`'s response of the corresponding page a
 # USAGE
 To download a specific media from a instagram media link:
 ```console
-uv run media.py <MEDIA_LINK>
+uv run python -m polaris media <MEDIA_LINK>
 ```
 
 where `<MEDIA_LINK>` could be:
@@ -29,7 +29,7 @@ where `<MEDIA_LINK>` could be:
 
 To list media (reels, posts) of a specific instagram profile link:
 ```console
-uv run user.py <PAGE_LINK>
+uv run python -m polaris user <PAGE_LINK>
 ```
 
 where `<PAGE_LINK>` could be:
@@ -42,3 +42,5 @@ where `<PAGE_LINK>` could be:
 > It stores the `init-data` of `<MEDIA_LINK>` in `./out/<user>/<shortcode-pk_of_shortcode>/init-data.json`
 > For videos it also downloads the corresponding thumbnail with file of extension `.thumb.jpg`
 
+> [!NOTE]
+> you can explore more options using `-h` or `--help`
