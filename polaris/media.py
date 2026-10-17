@@ -1,17 +1,12 @@
 import pathlib
-import sys
 
 from polaris.utils import extract_json, retrive_content, save_json, get_client
-from downloaders import DOWNLOADERS
+from polaris.downloaders import DOWNLOADERS
 
 
-def main():
-    if len(sys.argv) < 2:
-        raise ValueError("post link in required!")
-
-    link = sys.argv.pop()
+def main(link: str, out_path: str) -> int:
     with get_client() as client:
-        is_file = not pathlib.Path(link).exists()
+        is_file = pathlib.Path(link).exists()
         text, path = retrive_content(link, client)
 
         data = extract_json(text, "xig_polaris_media")["xig_polaris_media"]
@@ -23,7 +18,7 @@ def main():
         media = dict(polaris_media)
 
         username, typ = str(user["username"]), str(media["__typename"])
-        out = pathlib.Path("./out/").joinpath(username, data.get("code") or data["pk"])
+        out = pathlib.Path(out_path).joinpath(username, data.get("code") or data["pk"])
 
         out.mkdir(exist_ok=True, parents=True)
         downloader = DOWNLOADERS.get(typ, None)
@@ -32,6 +27,7 @@ def main():
             return 1
 
         print(f"[DOWNLOADER] passing control to '{downloader.__name__}'")
+        ok = False
         try:
             ok, path = downloader(media, user, out)
             save_json({"media": media, "user": user}, (out / "init-data").with_suffix(".json"))
@@ -43,6 +39,4 @@ def main():
         except NotImplementedError:
             print(f"[WARN] NotImplemented for '{typ}'")
 
-
-if __name__ == "__main__":
-    main()
+        return int(not ok)

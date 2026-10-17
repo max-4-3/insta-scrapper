@@ -6,18 +6,34 @@ from httpx import Client
 
 from polaris.consts import HEADERS
 
-temp = Path("./temp/")
+temp = Path("./tmp/")
+verbose = False
 
+
+def set_verbose(enable: bool):
+    global verbose
+    if verbose: print("verbose:", f"[*] verbose => '{enable}' ('{verbose}' -> '{enable}')")
+    verbose = enable
+
+def set_temp(path: str | Path):
+    global temp
+    if verbose: print("verbose:", f"[*] temp_path => '{path}' ('{temp}' -> '{path}')")
+
+    temp = Path(path)
+    temp.mkdir(exist_ok=True, parents=True)
 
 def get_client() -> Client:
     return Client(follow_redirects=True, headers=HEADERS)
 
 def retrive_content(link: str, client: Client) -> tuple[str, Path]:
-    is_file = not Path(link).exists()
+    is_file = Path(link).exists()
+    if verbose: print("verbose:", f"Retriving content from '{link}' ({is_file = })")
+
     if not is_file:
         page = client.get(link, follow_redirects=True, headers={**HEADERS, "Referer": link})
         page.raise_for_status()
-        print(f"[{page.status_code}] GET {link} [{len(page.history)}]")
+        if verbose:
+            print("verbose:", f"[{page.status_code}] GET {link} [{len(page.history)}]")
 
         path = (temp / alnum_and_under(link)).with_suffix(".page")
         text = page.read().decode(errors="ignore")
@@ -27,7 +43,8 @@ def retrive_content(link: str, client: Client) -> tuple[str, Path]:
         path = Path(link)
         text = path.read_text()
 
-    print(f"[{is_file and '<' or '>'}-{len(text)}] {path}")
+    if verbose:
+        print("verbose:", f"[{is_file and '<-' or '->'}{len(text)}] {path}")
     return (text, path)
 
 def save_page(page: str, path: Path):
@@ -42,6 +59,7 @@ def save_str(content: str, path: Path, ctype: str = "text"):
         path = path.with_suffix(f".{ctype}")
 
     path.write_text(content)
+    print("verbose:", f"[{ctype.upper()}] Saved '{len(content)}' chars in '{path.resolve()}'")
 
 def alnum_and_under(name: str) -> str:
     return re.sub(r'[^A-Za-z0-9_]+', '-', name)
@@ -55,6 +73,7 @@ def extract_json(data: str, key: str, prefix: str | None = None) -> dict:
         ])
     )
 
+    if verbose: print("verbose:", f"Compliled pattern: {pattern.pattern}")
     srch = pattern.search(data)
     if not srch: return {}
 
@@ -65,8 +84,11 @@ def extract_json(data: str, key: str, prefix: str | None = None) -> dict:
     try:
         # raw_decode parses a valid JSON object starting at start_idx
         # and returns a tuple: (parsed_dict, end_index_position)
-        obj, _ = decoder.raw_decode(data, idx=start_idx)
+        obj, end_idx = decoder.raw_decode(data, idx=start_idx)
+        if verbose: print("verbose:", f"Found json({key}) within {start_idx}-{end_idx} ({len(srch.groups())})")
+
         return obj
     except json.JSONDecodeError as e:
-        print(f"Failed to decode JSON: {e}")
+        if verbose:
+            print("verbose:", f"Failed to decode JSON: {e}")
         return {}
