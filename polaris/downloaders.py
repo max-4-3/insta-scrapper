@@ -51,7 +51,7 @@ def download_video_media(media: dict, user: dict, out: Path) -> tuple[bool, Path
         _save(thumb_link, path, ".thumb.jpg", "THUMB", client)
 
         video_link = media["video_versions"][0]["url"]
-        _save(video_link, path, ".thumb.jpg", "THUMB", client)
+        _save(video_link, path, ".mp4", "VIDEO", client)
 
     return (True, path)
 
